@@ -1,0 +1,20 @@
+{
+    "name": "tacticmedia/scim-server",
+    "description": "SCIM 2.0 server library (RFC 7643, RFC 7644).",
+    "license": "MIT",
+    "type": "library",
+    "keywords": [
+        "provisioning",
+        "rfc7643",
+        "rfc7644",
+        "scim"
+    ],
+    "require": {
+        "php": ">=8.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "TacticMedia\\ScimServer\\": "src/"
+        }
+    }
+}
