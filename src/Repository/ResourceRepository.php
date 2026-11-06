@@ -25,9 +25,10 @@ use TacticMedia\ScimServer\Query\ListResult;
 interface ResourceRepository
 {
     /**
-     * The hints are resolved as in {@see ListQuery}. The server passes them only for GET of one resource, for example
-     * excludedAttributes=members (Entra). A repository that skips attributes sets "meta.version", because the server
-     * otherwise derives the ETag from the returned document.
+     * The hints are resolved as in {@see ListQuery}. The server passes them for GET of one resource, for example
+     * excludedAttributes=members (Entra), and for a PATCH through a {@see DeltaRepository}: the delta attributes as
+     * $excludedAttributes, then the projection of the request for a 200 response. A repository that skips attributes
+     * sets "meta.version", because the server otherwise derives the ETag from the returned document.
      *
      * @param list<AttributePath> $attributes         a hint: a repository can skip what the response omits
      * @param list<AttributePath> $excludedAttributes a hint: a repository can skip what the response omits

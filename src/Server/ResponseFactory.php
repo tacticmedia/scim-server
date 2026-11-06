@@ -84,7 +84,7 @@ final readonly class ResponseFactory
     }
 
     /**
-     * Quirk 35: a client that accepts application/json but not application/scim+json gets application/json.
+     * A client that accepts application/json but not application/scim+json gets application/json.
      */
     private function contentType(Request $request): string
     {

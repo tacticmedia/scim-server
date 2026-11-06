@@ -35,7 +35,7 @@ final readonly class ValueEditor
      */
     public function apply(PatchOperationType $operation, mixed $stored, PatchTarget $target, mixed $value): mixed
     {
-        // Entra Q12 and RFC 7643 section 2.5: null and "" unassign.
+        // RFC 7643 section 2.5: null and "" unassign. Microsoft Entra ID clears a manager with "".
         $value = '' === $value && PatchOperationType::Remove !== $operation ? null : $value;
 
         if ($target->isWholeList()) {
@@ -53,9 +53,9 @@ final readonly class ValueEditor
     }
 
     /**
-     * add appends values that are not there yet (RFC 7644 section 3.5.2.1, Okta quirk 16). replace replaces the
-     * list (Okta quirk 14). remove with a value removes only the listed values (Entra Q8, Okta quirk 13). A value
-     * is there or listed as {@see ValueIndex} defines it.
+     * add appends values that are not there yet (RFC 7644 section 3.5.2.1), so that a member add sent again changes
+     * nothing. replace replaces the list. remove with a value removes only the listed values (Microsoft Entra ID,
+     * Keycloak). A value is there or listed as {@see ValueIndex} defines it.
      */
     private function applyToList(PatchOperationType $operation, mixed $stored, PatchTarget $target, mixed $value): mixed
     {

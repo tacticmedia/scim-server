@@ -8,9 +8,9 @@ use TacticMedia\ScimServer\SchemaUrn;
 
 /**
  * The schemas of RFC 7643 Figure 9 with the Verified and Held errata applied, except the "manager.$ref" part of Held
- * erratum 8359, and with Reported erratum 6011. The schemas of Figure 10 with the Verified and Held errata, and with
- * Reported errata 8011 and 9018, so that they describe what /ServiceProviderConfig returns. Also the common attributes
- * of section 3.1.
+ * erratum 8359, and with Reported erratum 6011. The schemas of Figure 10 with the Verified and Held errata, with
+ * Reported errata 8011 and 9018, and with authenticationSchemes.primary, so that they describe what
+ * /ServiceProviderConfig returns. Also the common attributes of section 3.1.
  *
  * @see https://www.rfc-editor.org/rfc/rfc7643#section-8.7.1
  * @see https://www.rfc-editor.org/rfc/rfc7643#section-8.7.2
@@ -94,6 +94,8 @@ final class CoreSchemas
                 self::readOnly('description', 'A description of the authentication scheme.', required: true),
                 self::readOnly('specUri', "An HTTP-addressable URL pointing to the authentication scheme's specification.", AttributeType::Reference, referenceTypes: ['external']),
                 self::readOnly('documentationUri', "An HTTP-addressable URL pointing to the authentication scheme's usage documentation.", AttributeType::Reference, referenceTypes: ['external']),
+                // Section 8.5 shows it, Figure 10 omits it; rejected erratum 7921 points to section 2.4.
+                self::readOnly('primary', "A Boolean value indicating the 'primary' or preferred attribute value for this attribute. The primary attribute value 'true' MUST appear no more than once.", AttributeType::Boolean),
             ]),
             self::pagination(),
         ]);

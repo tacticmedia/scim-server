@@ -29,7 +29,7 @@ final readonly class UniquenessChecker
      * @param array<string, mixed> $document normalized, in schema spelling
      * @param string|null          $ownId    the id of the resource that $document replaces
      *
-     * @throws ScimException uniqueness, 409 (Okta quirk 20)
+     * @throws ScimException uniqueness, 409
      */
     public function check(array $document, RegisteredResourceType $registered, ?string $ownId = null): void
     {

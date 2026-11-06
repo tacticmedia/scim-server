@@ -10,10 +10,12 @@ use TacticMedia\ScimServer\Exception\ScimException;
 use TacticMedia\ScimServer\Patch\DeltaSplit;
 use TacticMedia\ScimServer\Patch\DeltaSplitter;
 use TacticMedia\ScimServer\Patch\PatchApplier;
+use TacticMedia\ScimServer\Patch\PatchRedactor;
 use TacticMedia\ScimServer\Patch\PatchRequest;
 use TacticMedia\ScimServer\Repository\DeltaRepository;
 use TacticMedia\ScimServer\Repository\PatchResult;
 use TacticMedia\ScimServer\Repository\ResourcePatch;
+use TacticMedia\ScimServer\Repository\ValuesChange;
 use TacticMedia\ScimServer\Resource\DocumentNormalizer;
 use TacticMedia\ScimServer\Resource\DocumentProjector;
 
@@ -31,6 +33,7 @@ final readonly class DeltaPatcher
         private DocumentNormalizer $normalizer,
         private PatchApplier $patches,
         private DocumentProjector $projector,
+        private PatchRedactor $redactor,
         private DeltaSplitter $splitter = new DeltaSplitter(),
     ) {
     }
@@ -94,9 +97,11 @@ final readonly class DeltaPatcher
      */
     private function dispatch(RegisteredResourceType $registered, array $light, PatchResult $result, PatchRequest $patch, bool $documentChanged): void
     {
-        if ($documentChanged || [] !== $result->changes) {
+        $changes = array_values(array_filter($result->changes, static fn (ValuesChange $change): bool => [] !== $change->added || [] !== $change->removed));
+
+        if ($documentChanged || [] !== $changes) {
             $type = $registered->type;
-            $this->events?->dispatch(new ResourcePatched($type, $this->projector->returnable($light, $type), $this->projector->returnable($result->document, $type), $result->changes, $patch));
+            $this->events?->dispatch(new ResourcePatched($type, $this->projector->returnable($light, $type), $this->projector->returnable($result->document, $type), $changes, $this->redactor->redact($patch, $type)));
         }
     }
 }

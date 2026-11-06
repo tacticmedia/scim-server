@@ -161,7 +161,7 @@ final readonly class ComplexValueEditor
     }
 
     /**
-     * The value is an object, or a list with one object (Entra Q11).
+     * The value is an object, or a list with one object (Microsoft Entra ID).
      *
      * @return array<string, null> keyed by the schema spelling
      */
@@ -186,7 +186,7 @@ final readonly class ComplexValueEditor
 
     /**
      * Microsoft Entra ID sets emails[type eq "work"].value on a user without a work email and expects a new value
-     * (Entra Q6, erratum 8097).
+     * (erratum 8097).
      *
      * @return array<mixed>|null
      */

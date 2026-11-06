@@ -8,8 +8,9 @@ use Psr\Clock\ClockInterface;
 use TacticMedia\ScimServer\Exception\ScimException;
 
 /**
- * RFC 9865 cursors: a position, the query it belongs to and the issue time, encrypted and authenticated
- * (XSalsa20-Poly1305) and encoded as base64url without padding. A random nonce makes each cursor a new string.
+ * RFC 9865 cursors: an offset, an optional repository position, the query it belongs to and the issue time, encrypted
+ * and authenticated (XSalsa20-Poly1305) and encoded as base64url without padding. A random nonce makes each cursor a
+ * new string.
  *
  * @internal
  *
@@ -33,22 +34,26 @@ final readonly class CursorCodec
     }
 
     /**
-     * @param int<0, max>|list<int|float|string|bool|null> $position an offset, or a repository position
+     * A position that makes the cursor longer than decode() accepts is left out, so the cursor holds only the offset.
+     *
+     * @param int<0, max>                           $offset   the number of resources before the next page
+     * @param list<int|float|string|bool|null>|null $position a repository position; null: page by offset
      */
-    public function encode(string $query, int|array $position): string
+    public function encode(string $query, int $offset, ?array $position = null): string
     {
         $nonce = random_bytes(\SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-        $payload = json_encode(['q' => $query, 't' => $this->now(), 'p' => $position], \JSON_THROW_ON_ERROR | \JSON_PRESERVE_ZERO_FRACTION);
+        $payload = json_encode(['q' => $query, 't' => $this->now(), 'o' => $offset, 'p' => $position], \JSON_THROW_ON_ERROR | \JSON_PRESERVE_ZERO_FRACTION | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        $cursor = sodium_bin2base64($nonce.sodium_crypto_secretbox($payload, $nonce, $this->key), \SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
 
-        return sodium_bin2base64($nonce.sodium_crypto_secretbox($payload, $nonce, $this->key), \SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
+        return null !== $position && \strlen($cursor) > self::MAX_CURSOR_LENGTH ? $this->encode($query, $offset) : $cursor;
     }
 
     /**
-     * @return int<0, max>|list<int|float|string|bool|null>
+     * @return array{int<0, max>, list<int|float|string|bool|null>|null} the offset and the repository position
      *
      * @throws ScimException invalidCursor, or expiredCursor after the lifetime
      */
-    public function decode(string $cursor, string $query): int|array
+    public function decode(string $cursor, string $query): array
     {
         $payload = $this->open($cursor);
         $issuedAt = $payload['t'] ?? null;
@@ -61,7 +66,7 @@ final readonly class CursorCodec
             throw ScimException::expiredCursor();
         }
 
-        return $this->position($payload['p'] ?? null);
+        return [$this->offset($payload['o'] ?? null), $this->position($payload['p'] ?? null)];
     }
 
     /**
@@ -81,12 +86,20 @@ final readonly class CursorCodec
     }
 
     /**
-     * @return int<0, max>|list<int|float|string|bool|null>
+     * @return int<0, max>
      */
-    private function position(mixed $position): int|array
+    private function offset(mixed $offset): int
+    {
+        return \is_int($offset) && $offset >= 0 ? $offset : throw ScimException::invalidCursor();
+    }
+
+    /**
+     * @return list<int|float|string|bool|null>|null
+     */
+    private function position(mixed $position): ?array
     {
         return match (true) {
-            \is_int($position) && $position >= 0 => $position,
+            null === $position => null,
             \is_array($position) && array_is_list($position) => array_map($this->scalar(...), $position),
             default => throw ScimException::invalidCursor(),
         };

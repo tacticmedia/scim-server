@@ -19,8 +19,8 @@ use TacticMedia\ScimServer\Schema\ResolvedAttribute;
 final class ChangeGuard
 {
     /**
-     * A value equal to the stored one is no change. Thus a readOnly value equal to the stored one passes (Okta
-     * quirk 2), and an immutable attribute without a stored value takes one (RFC 7644 section 3.5.2).
+     * A value equal to the stored one is no change. Thus a readOnly value equal to the stored one passes (the "id"
+     * in an Okta group rename), and an immutable attribute without a stored value takes one (RFC 7644 section 3.5.2).
      *
      * @throws ScimException mutability
      */

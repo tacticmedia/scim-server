@@ -31,7 +31,7 @@ final readonly class PatchTargetResolver
     }
 
     /**
-     * A path-less "add" or "replace" gives one target per key of the value object (Entra Q4, Okta quirk 1).
+     * A path-less "add" or "replace" gives one target per key of the value object (Microsoft Entra ID, Okta).
      *
      * @return list<array{PatchTarget, mixed}> each target with its value
      *
@@ -59,7 +59,7 @@ final readonly class PatchTargetResolver
 
     /**
      * "remove" targets every attribute of the extension. "add" and "replace" target the keys of the value, as without
-     * a path (Keycloak, quirk 40).
+     * a path (Keycloak).
      *
      * @return list<array{PatchTarget, mixed}>
      */

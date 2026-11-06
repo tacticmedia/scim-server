@@ -8,8 +8,9 @@ use TacticMedia\ScimServer\Patch\PatchRequest;
 use TacticMedia\ScimServer\Schema\ResourceType;
 
 /**
- * Dispatched after the repository replaced the resource, for PUT and for a PATCH that changed it. The documents have
- * no value that is never returned, such as "password".
+ * Dispatched after the repository replaced the resource, for PUT and for a PATCH that changed it. The documents and
+ * the PATCH request have no value that is never returned, such as "password": an operation whose path names such an
+ * attribute has the value null.
  */
 final readonly class ResourceUpdated
 {

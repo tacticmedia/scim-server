@@ -9,7 +9,7 @@ use Symfony\Component\HttpFoundation\Response;
 use TacticMedia\ScimServer\Exception\ScimException;
 
 /**
- * Accepts application/scim+json, application/json (quirk 34) and a body without Content-Type, each with any
+ * Accepts application/scim+json, application/json (Okta, OneLogin) and a body without Content-Type, each with any
  * parameters.
  *
  * @internal

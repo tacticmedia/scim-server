@@ -11,9 +11,9 @@ use TacticMedia\ScimServer\Query\CursorPage;
 use TacticMedia\ScimServer\Repository\CursorPaginatedRepository;
 
 /**
- * Answers a list or search by index or by cursor, as {@see ListParameters::$cursor} selects. A cursor holds a
- * repository position ({@see CursorPaginatedRepository}) or an offset, and the query that it belongs to: the resource
- * types, filter, sortBy and sortOrder.
+ * Answers a list or search by index or by cursor, as {@see ListParameters::$cursor} selects. A cursor holds an offset,
+ * a repository position ({@see CursorPaginatedRepository}) unless the position is too long for a cursor, and the query
+ * that it belongs to: the resource types, filter, sortBy and sortOrder. A cursor without a position pages by offset.
  *
  * @internal
  *
@@ -48,11 +48,11 @@ final readonly class Paginator
         }
 
         $query = hash('xxh128', serialize([array_map(static fn (RegisteredResourceType $registered): string => $registered->type->name, $resourceTypes), $acrossTypes, $list->filter, (string) $list->sortBy, $list->sortOrder]));
-        $position = '' === $list->cursor ? null : $this->cursors->decode($list->cursor, $query);
+        [$offset, $position] = '' === $list->cursor ? [0, null] : $this->cursors->decode($list->cursor, $query);
 
-        return \is_int($position)
-            ? $this->byOffset($request, $this->cursors, $query, $page, $position)
-            : $this->byPosition($request, $this->cursors, $query, $page, $this->positioned($positioned, $position));
+        return '' === $list->cursor || null !== $position
+            ? $this->byPosition($request, $this->cursors, $query, $page, $offset, $this->positioned($positioned, $position))
+            : $this->byOffset($request, $this->cursors, $query, $page, $offset);
     }
 
     /**
@@ -69,14 +69,17 @@ final readonly class Paginator
 
     /**
      * @param \Closure(int<1, max>): array{list<array<string, mixed>>, int} $page
+     * @param int<0, max>                                                   $offset the number of resources before the page
      */
-    private function byPosition(Request $request, CursorCodec $cursors, string $query, \Closure $page, ?CursorPage $positioned): Response
+    private function byPosition(Request $request, CursorCodec $cursors, string $query, \Closure $page, int $offset, ?CursorPage $positioned): Response
     {
         if (!$positioned instanceof CursorPage) {
-            return $this->byOffset($request, $cursors, $query, $page, 0);
+            return $this->byOffset($request, $cursors, $query, $page, $offset);
         }
 
-        return $this->responses->cursorList($request, $positioned->resources, $positioned->totalResults, null === $positioned->next ? null : $cursors->encode($query, $positioned->next));
+        $next = null === $positioned->next ? null : $cursors->encode($query, $offset + \count($positioned->resources), $positioned->next);
+
+        return $this->responses->cursorList($request, $positioned->resources, $positioned->totalResults, $next);
     }
 
     /**

@@ -156,8 +156,8 @@ The repository does this work:
 | `get($id, $attributes, $excludedAttributes)` | Return the document, or `null` for an unknown id. |
 | `list(ListQuery $query)` | Apply `filter`, then `sortBy` and `sortOrder`, then `startIndex` (from 1) and `count`. Return a `ListResult` with the page and the number of all matches. |
 | `create($document)` | Set `id`, `meta.created`, `meta.lastModified` and, if you use it, `meta.version`. The document has no `id` and no `meta`. Return the stored document. |
-| `replace($id, $document)` | Store `$document` as the complete new state. Update `meta.lastModified` and, if you use it, `meta.version`. Throw `ScimException::notFound()` for an unknown id. |
-| `delete($id)` | Throw `ScimException::notFound()` for an unknown id. |
+| `replace($id, $document, $version)` | Store `$document` as the complete new state. Update `meta.lastModified` and, if you use it, `meta.version`. Throw `ScimException::notFound()` for an unknown id. When `$version` is not `null`, write only while the stored `meta.version` equals it, else throw `ScimException::preconditionFailed()`. |
+| `delete($id, $version)` | Throw `ScimException::notFound()` for an unknown id. When `$version` is not `null`, delete only while the stored `meta.version` equals it, else throw `ScimException::preconditionFailed()`. |
 
 Rules:
 
@@ -176,15 +176,17 @@ Rules:
   `password`.
 - User `groups` is `readOnly`. The server never changes it. Compute it from the group memberships if you need it.
 
-Projection hints: `get()` gets the `attributes` and `excludedAttributes` of a GET of one resource. `ListQuery` has
-them for lists and searches, except for root queries with `sortBy`. Each is a list of resolved `AttributePath`. You
-can skip what the response omits. The server projects the response itself. If you skip attributes, set
-`meta.version`, because a hash of a partial document is not a stable ETag.
+Projection hints: `get()` gets the `attributes` and `excludedAttributes` of a GET of one resource, and on the delta
+path of a PATCH the hints that [Member deltas](#member-deltas) lists. `ListQuery` has them for lists and searches,
+except for root queries with `sortBy`. Each is a list of resolved `AttributePath`. You can skip what the response
+omits. The server projects the response itself. If you skip attributes, set `meta.version`, because a hash of a
+partial document is not a stable ETag.
 
-`If-Match` is not atomic. The server compares it with the document from `get()`, then calls `replace()` or
-`delete()` without a lock. Two concurrent requests with the same `If-Match` can both pass. For atomic writes, use
-optimistic locking: the document that `replace()` gets has the `meta.version` that the server read. `delete()`
-gets only the id.
+`If-Match`: the server compares it with the document from `get()`. For an `If-Match` with an entity tag, it then
+passes the `meta.version` of that document as `$version` to `replace()` or `delete()`. Without `If-Match`, and for
+`If-Match: *`, `$version` is `null`. A repository that writes only while the stored `meta.version` still equals
+`$version` makes `If-Match` atomic. A repository that ignores `$version` leaves a race between the check and the
+write: two concurrent requests with the same `If-Match` can both pass.
 
 ## Member deltas
 
@@ -249,12 +251,14 @@ Contract of `patch()`:
 | `$patch->version` | Not `null`: throw `ScimException::preconditionFailed('Failed to update. Resource has changed on the server.')` when the stored `meta.version` is different. |
 | Errors | `ScimException::notFound()` for an unknown id. `ScimException::invalidValue()` for a `value` of an `Add` or `Replace` step that names no resource. |
 | `meta` | Change `meta.version` and `meta.lastModified` when the document or a value changed. Keep them when nothing changed. |
-| Result | `new PatchResult($document, $changes)`: the stored document without the delta attributes and with `meta.version`, and one `ValuesChange` per step with the values that the step added and removed. |
+| Result | `new PatchResult($document, $changes)`: the stored document without the delta attributes and with `meta.version`, and one `ValuesChange` for each step that added or removed a value, with those values. Leave out steps without effect, so `$changes` is `[]` when no value changed. |
 
 Events: a PATCH on the delta path dispatches `Event\ResourcePatched` (`type`, `before`, `after`, `changes`, `patch`)
-instead of `ResourceUpdated`. `before` and `after` have no delta attributes. `changes` is the `PatchResult` list. The
-server dispatches it when the document changed or a value was added or removed. PUT and PATCH on the full path still
-dispatch `ResourceUpdated`. A listener that must see every change listens to both events.
+instead of `ResourceUpdated`. `before` and `after` have no delta attributes. `changes` is the `PatchResult` list
+without a `ValuesChange` that has no values. `before`, `after` and `patch` have no value that is never returned, as
+[Events](#events) describes. The server dispatches it when the document changed or a value was added or removed. PUT
+and PATCH on the full path still dispatch `ResourceUpdated`. A listener that must see every change listens to both
+events.
 
 Differences from the full path:
 
@@ -294,7 +298,7 @@ $devices = new ResourceType('Device', '/Devices', new Schema('urn:example:scim:s
 - `AttributeDefinition` defaults: `string`, single-valued, not required, `caseExact` false, `readWrite`, `returned`
   `default`, `uniqueness` `none`. A `writeOnly` attribute is always `returned` `never`.
 - Register each type with `new RegisteredResourceType($type, $repository)`. `/ResourceTypes` and `/Schemas` show
-  them.
+  them. `/Schemas` also shows the ServiceProviderConfig, ResourceType and Schema schemas (RFC 7643 section 8.7.2).
 - Endpoint names match in any case. A fixed name such as `Schemas` or `Bulk` wins over a resource type endpoint.
 - The server fills `owner.$ref` above, because `referenceTypes` names one resource type.
 
@@ -364,9 +368,9 @@ Requests:
 | `expiredCursor` | The cursor is older than `cursorTimeoutSeconds`. |
 | `invalidCount` | `count` is not an integer. |
 
-A cursor contains the position, a hash of the query and the time of issue, encrypted and authenticated with
-XSalsa20-Poly1305. Clients cannot read or change it, and the server keeps no state. Each page runs the query again,
-so your authorization and the current data apply to each page.
+A cursor contains the offset, the position, a hash of the query and the time of issue, encrypted and authenticated
+with XSalsa20-Poly1305. Clients cannot read or change it, and the server keeps no state. Each page runs the query
+again, so your authorization and the current data apply to each page.
 
 The position comes from the repository:
 
@@ -378,6 +382,8 @@ The position comes from the repository:
   and a unique id of the last resource, or `null` on the last page. `$totalResults` can be `null` when it is unknown;
   the response then omits it. Return `null` from `listAfter()` to page this query by offset. Throw
   `ScimException::invalidCursor()` for a position that you cannot use. `InMemoryResourceRepository` implements it.
+  When a position would make the cursor longer than 4096 characters, for example with a long sort value, the cursor
+  holds only the offset, and the rest of the traversal pages by offset.
 - Queries across resource types (`/` and `/.search`) always use an offset, because the server merges their pages
   itself.
 
@@ -391,9 +397,45 @@ Give a PSR-14 event dispatcher, for example `symfony/event-dispatcher`, as the t
 | `Event\ResourceUpdated` | `type`, `before`, `after`, `patch` (`null` for PUT) | `replace()`, for PUT and for a PATCH that changes the resource |
 | `Event\ResourceDeleted` | `type`, `resource` (the document before the delete) | `delete()` |
 
-`resource` and `after` are the documents that the repository returned. They have no `meta.resourceType` and no
-`meta.location`. The server dispatches no event when the repository call throws. A `ScimException` from a listener
-becomes the error response, but the write is already done.
+`resource`, `before` and `after` are the repository documents without the values that are never returned, such as
+`password`. They have no `meta.resourceType` and no `meta.location`. `patch` is the PATCH request without these
+values: an operation whose path names such an attribute has the value `null`, a value object loses the keys of such
+attributes, and a complex value loses such sub-attributes. The server dispatches no event when the repository call
+throws. A `ScimException` from a listener becomes the error response, but the write is already done.
+
+## /Me
+
+`ScimServer` takes a `Server\MeResolver` as its `me` argument. Without one, `/Me` answers 501.
+
+```php
+use Symfony\Component\HttpFoundation\Request;
+use TacticMedia\ScimServer\Server\MeResolver;
+use TacticMedia\ScimServer\Server\MeSubject;
+
+final class UserNameMeResolver implements MeResolver
+{
+    public function resolve(Request $request): ?MeSubject
+    {
+        // Set by your authentication.
+        $userName = $request->attributes->get('user_name');
+
+        return \is_string($userName) ? new MeSubject('User', $userName, 'userName') : null;
+    }
+}
+
+$server = new ScimServer($resourceTypes, me: new UserNameMeResolver());
+```
+
+- `new MeSubject($resourceType, $value, $attribute = 'id')` names the resource whose `$attribute` equals `$value`.
+  For `id`, the server makes no query. For another attribute, it calls `list()` with an `eq` filter, so the
+  attribute must be filterable. A resource type that is not registered, or an attribute that it cannot filter,
+  throws `\LogicException`.
+- `null` or no match answers 404. More than one match answers 409. A `ScimException` from `resolve()` becomes the
+  response, for example 403.
+- GET, HEAD, PUT, PATCH and DELETE act on the resource as on `/Users/{id}`. Each response after the lookup has
+  `Location` set to the URL of the resource. POST answers 501.
+- A write through `/Me` has the rights of a `/Users/{id}` request: an end user can change `active`, `userName` or
+  `roles`, or delete the resource. Thus allow only GET and HEAD on `/Me` for end users.
 
 ## Endpoints and features
 
@@ -408,7 +450,7 @@ becomes the error response, but the write is already done.
 | `/ResourceTypes`, `/ResourceTypes/{name}` | GET, HEAD |
 | `/Schemas`, `/Schemas/{urn}` | GET, HEAD |
 | `/Bulk` | POST |
-| `/Me` | All: 501 |
+| `/Me` | GET, HEAD, PUT, PATCH, DELETE with a `MeResolver`, else 501. POST: 501. See [/Me](#me). |
 
 An unknown path answers 404. A known path with another method answers 405 with an `Allow` header.
 
@@ -423,6 +465,10 @@ An unknown path answers 404. A known path with another method answers 405 with a
   With `attributes` or `excludedAttributes` in the query, it answers 200 with the resource.
 - Bulk: `bulkId` references in `data` at any depth, also to a later POST. `failOnErrors` stops after the given
   number of failed operations.
+- Bulk resolves circular `bulkId` references (RFC 7644 section 3.7.1). It takes the first POST of the cycle, in
+  request order, that has no such reference in a required attribute. It creates that resource without the
+  references, then adds them with a PATCH. When each POST of the cycle has its reference in a required attribute,
+  the first POST fails with 409, and the POSTs that reference it fail with 409 too.
 - ETags: each returned resource has `meta.version`, and single-resource responses have an `ETag` header. GET, PUT,
   PATCH and DELETE of a resource evaluate `If-Match` and `If-None-Match` and can answer 304 or 412.
 - HEAD works wherever GET works.
@@ -457,19 +503,18 @@ section 3.5.2.3 requires. A client that expects a full replacement finds the omi
 - `manager.$ref` is optional, because Microsoft Entra ID sends only the manager id. Erratum 8359 makes it required.
 - Group `members.display` is `readOnly` (erratum 6011). Group `members.value` is `caseExact`, because ids are case
   exact.
-- Group `displayName` has `uniqueness` `none`, as in RFC 7643. A duplicate name answers 201. For 409, register a
-  Group schema whose `displayName` has `Uniqueness::Server`.
+- Group `displayName` has `uniqueness` `server`, unlike RFC 7643 Figure 9 (`none`), because Microsoft Entra ID
+  expects 409 for a duplicate group name. A duplicate name answers 409 `uniqueness`. To accept duplicate names,
+  register a Group schema whose `displayName` has `Uniqueness::None`.
 - The server checks `uniqueness` `global` only in the repository of the same resource type.
 - A `filter` or `sortBy` on an attribute that is never returned, for example `password`, answers 400. A match or an
   order could reveal the value.
 - A filter longer than 8192 bytes, or with more than 64 nested levels of `(` and `[`, answers 400 `invalidFilter`.
 - `schemas` is not an attribute in filters.
-- `/Me` answers 501.
-- Cursor pagination (RFC 9865) is not supported. The server ignores `cursor` and uses `startIndex`.
+- Cursor pagination (RFC 9865) needs `cursorKey`. The server does not send `previousCursor`. An offset cursor moves
+  when a resource before its position is created or deleted, as `startIndex` does.
 - A root query with `sortBy` loads `startIndex - 1 + count` resources from each resource type.
-- Bulk does not resolve circular `bulkId` references. Each operation in the cycle fails with 409.
 - `If-Match` uses the weak comparison of ETags.
-- `/Schemas` shows the schemas of the registered resource types only.
 
 ## Contributing
 

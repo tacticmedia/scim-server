@@ -13,6 +13,7 @@ use TacticMedia\ScimServer\Event\ResourceUpdated;
 use TacticMedia\ScimServer\Exception\ScimException;
 use TacticMedia\ScimServer\Patch\DeltaSplit;
 use TacticMedia\ScimServer\Patch\PatchApplier;
+use TacticMedia\ScimServer\Patch\PatchRedactor;
 use TacticMedia\ScimServer\Patch\PatchRequest;
 use TacticMedia\ScimServer\Path\AttributePath;
 use TacticMedia\ScimServer\Resource\DocumentNormalizer;
@@ -44,8 +45,9 @@ final readonly class ResourceHandler
         private DocumentNormalizer $normalizer = new DocumentNormalizer(),
         private PatchApplier $patches = new PatchApplier(),
         private DocumentProjector $projector = new DocumentProjector(),
+        private PatchRedactor $redactor = new PatchRedactor(),
     ) {
-        $this->deltas = new DeltaPatcher($events, $uniqueness, $normalizer, $patches, $projector);
+        $this->deltas = new DeltaPatcher($events, $uniqueness, $normalizer, $patches, $projector, $redactor);
     }
 
     /**
@@ -141,7 +143,7 @@ final readonly class ResourceHandler
 
     /**
      * The stored values that GET never returns and the PUT body does not name, as PATCH keeps them too. A client that
-     * builds the body from GET output cannot send them back (Okta quirk 4); RFC 7644 section 3.5.1 lets the server
+     * builds the body from GET output, as Okta does, cannot send them back; RFC 7644 section 3.5.1 lets the server
      * clear only omitted readWrite values.
      *
      * @param array<string, mixed> $existing
@@ -223,7 +225,8 @@ final readonly class ResourceHandler
     {
         $this->uniqueness->check($document, $registered, $id);
         $after = $registered->repository->replace($id, $document, $this->requiredVersion($request, $before));
-        $this->events?->dispatch(new ResourceUpdated($registered->type, $this->projector->returnable($before, $registered->type), $this->projector->returnable($after, $registered->type), $patch));
+        $type = $registered->type;
+        $this->events?->dispatch(new ResourceUpdated($type, $this->projector->returnable($before, $type), $this->projector->returnable($after, $type), $patch instanceof PatchRequest ? $this->redactor->redact($patch, $type) : null));
 
         return $after;
     }
