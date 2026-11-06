@@ -10,7 +10,19 @@
         "scim"
     ],
     "require": {
-        "php": ">=8.5"
+        "php": ">=8.5",
+        "ext-sodium": "*",
+        "doctrine/lexer": "^3.0",
+        "psr/clock": "^1.0",
+        "psr/event-dispatcher": "^1.0",
+        "symfony/http-foundation": "^8.1.11",
+        "symfony/string": "^8.1",
+        "symfony/uid": "^8.1"
+    },
+    "suggest": {
+        "psr/http-message": "To use the PSR-15 request handler.",
+        "psr/http-server-handler": "To use the PSR-15 request handler.",
+        "symfony/psr-http-message-bridge": "To use the PSR-15 request handler."
     },
     "autoload": {
         "psr-4": {
