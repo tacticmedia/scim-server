@@ -523,4 +523,4 @@ directory `scim-server/`. Send issues and pull requests to the monorepo.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/tacticmedia/scim-server/blob/main/LICENSE).
