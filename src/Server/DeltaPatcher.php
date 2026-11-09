@@ -45,7 +45,7 @@ final readonly class DeltaPatcher
     {
         $repository = $registered->repository;
 
-        return $repository instanceof DeltaRepository ? $this->splitter->split($patch, $registered->type, $repository->deltaAttributes()) : null;
+        return $repository instanceof DeltaRepository ? $this->splitter->split($patch, $registered->type, $repository) : null;
     }
 
     /**
@@ -70,9 +70,7 @@ final readonly class DeltaPatcher
             $this->uniqueness->check($document, $registered, $id);
         }
 
-        $repository = $registered->repository;
-        \assert($repository instanceof DeltaRepository);
-        $result = $repository->patch($id, new ResourcePatch($document, $split->steps, $version));
+        $result = $split->repository->patch($id, new ResourcePatch($document, $split->steps, $version));
         $after = $this->versioned($result->document, $registered);
         $this->dispatch($registered, $light, $result, $patch, null !== $document);
 

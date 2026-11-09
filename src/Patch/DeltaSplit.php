@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace TacticMedia\ScimServer\Patch;
 
 use TacticMedia\ScimServer\Path\AttributePath;
+use TacticMedia\ScimServer\Repository\DeltaRepository;
 use TacticMedia\ScimServer\Repository\ValuesStep;
 
 /**
@@ -21,6 +22,7 @@ final readonly class DeltaSplit
         public array $operations,
         public array $steps,
         public array $deltaAttributes,
+        public DeltaRepository $repository,
     ) {
     }
 }

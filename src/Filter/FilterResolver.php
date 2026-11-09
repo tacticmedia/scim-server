@@ -35,6 +35,22 @@ final readonly class FilterResolver
     }
 
     /**
+     * @throws ScimException invalidFilter
+     */
+    public function resolveComparison(Comparison $comparison, ResourceType $type): Comparison
+    {
+        return $this->comparison($comparison, $type, null);
+    }
+
+    /**
+     * @throws ScimException invalidFilter
+     */
+    public function resolveValuePath(ValuePathFilter $filter, ResourceType $type): ValuePathFilter
+    {
+        return $this->valuePath($filter, $type, null);
+    }
+
+    /**
      * A complex attribute without a sub-attribute sorts by its "value" sub-attribute, as a filter compares it.
      *
      * @return ResolvedAttribute|null null when the resource type does not define $sortBy
@@ -64,14 +80,14 @@ final readonly class FilterResolver
             $filter instanceof LogicalAnd => new LogicalAnd($this->resolveNode($filter->left, $type, $parent), $this->resolveNode($filter->right, $type, $parent)),
             $filter instanceof LogicalOr => new LogicalOr($this->resolveNode($filter->left, $type, $parent), $this->resolveNode($filter->right, $type, $parent)),
             $filter instanceof Not => new Not($this->resolveNode($filter->filter, $type, $parent)),
-            $filter instanceof ValuePathFilter => $this->resolveValuePath($filter, $type, $parent),
+            $filter instanceof ValuePathFilter => $this->valuePath($filter, $type, $parent),
             $filter instanceof Present => new Present($this->resolvePath($filter->path, $type, $parent)->path()),
-            $filter instanceof Comparison => $this->resolveComparison($filter, $type, $parent),
+            $filter instanceof Comparison => $this->comparison($filter, $type, $parent),
             default => throw ScimException::invalidFilter(\sprintf('The filter node %s is not supported.', $filter::class)),
         };
     }
 
-    private function resolveValuePath(ValuePathFilter $filter, ResourceType $type, ?ResolvedAttribute $parent): ValuePathFilter
+    private function valuePath(ValuePathFilter $filter, ResourceType $type, ?ResolvedAttribute $parent): ValuePathFilter
     {
         if ($parent instanceof ResolvedAttribute) {
             throw ScimException::invalidFilter(\sprintf("Value paths do not nest: '%s[...]' is inside '%s[...]'.", $filter->path, $parent->path()));
@@ -86,7 +102,7 @@ final readonly class FilterResolver
         return new ValuePathFilter($attribute->path(), $this->resolveNode($filter->filter, $type, $attribute));
     }
 
-    private function resolveComparison(Comparison $comparison, ResourceType $type, ?ResolvedAttribute $parent): Comparison
+    private function comparison(Comparison $comparison, ResourceType $type, ?ResolvedAttribute $parent): Comparison
     {
         $resolved = $this->resolvePath($comparison->path, $type, $parent);
         $definition = $resolved->definition();

@@ -90,10 +90,7 @@ final readonly class PatchTargetResolver
             throw ScimException::invalidPath(\sprintf("A value filter selects values of a multi-valued attribute, and '%s' is not one.", $attribute->path()->parent()));
         }
 
-        $valuePath = $this->filters->resolve(new ValuePathFilter($patchPath->path->parent(), $valueFilter), $type);
-        \assert($valuePath instanceof ValuePathFilter);
-
-        return new PatchTarget($attribute, $valuePath->filter);
+        return new PatchTarget($attribute, $this->filters->resolveValuePath(new ValuePathFilter($patchPath->path->parent(), $valueFilter), $type)->filter);
     }
 
     /**

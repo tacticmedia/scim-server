@@ -38,15 +38,15 @@ final readonly class DeltaSplitter
     }
 
     /**
-     * @param list<AttributePath> $deltaAttributes
-     *
      * @return DeltaSplit|null null when there is no delta attribute, an operation on one is not a step, or an
      *                         operation fails; {@see PatchApplier} then applies the request and reports the error
      *
      * @throws \LogicException for a delta attribute that cannot take steps
      */
-    public function split(PatchRequest $request, ResourceType $type, array $deltaAttributes): ?DeltaSplit
+    public function split(PatchRequest $request, ResourceType $type, DeltaRepository $repository): ?DeltaSplit
     {
+        $deltaAttributes = $repository->deltaAttributes();
+
         if ([] === $deltaAttributes) {
             return null;
         }
@@ -54,7 +54,7 @@ final readonly class DeltaSplitter
         $attributes = array_map(fn (AttributePath $path): AttributePath => $this->deltaAttribute($path, $type), $deltaAttributes);
 
         try {
-            return $this->splitOperations($request, $type, $attributes);
+            return $this->splitOperations($request, $type, $attributes, $repository);
         } catch (ScimException) {
             return null;
         }
@@ -63,7 +63,7 @@ final readonly class DeltaSplitter
     /**
      * @param list<AttributePath> $attributes
      */
-    private function splitOperations(PatchRequest $request, ResourceType $type, array $attributes): ?DeltaSplit
+    private function splitOperations(PatchRequest $request, ResourceType $type, array $attributes, DeltaRepository $repository): ?DeltaSplit
     {
         $operations = [];
         $steps = [];
@@ -86,7 +86,7 @@ final readonly class DeltaSplitter
             $steps = [...$steps, ...$operationSteps];
         }
 
-        return new DeltaSplit($operations, $steps, $attributes);
+        return new DeltaSplit($operations, $steps, $attributes, $repository);
     }
 
     /**
